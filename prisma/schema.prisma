@@ -1,0 +1,273 @@
+// Prisma Schema for Social Impact Clothing Marketplace & Referral Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum Role {
+  USER
+  SELLER
+  NGO
+  ADMIN
+}
+
+enum DonationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  PICKUP_SCHEDULED
+  COLLECTED
+  DISTRIBUTED
+  REJECTED
+}
+
+enum CommissionType {
+  PERCENTAGE
+  FIXED
+}
+
+enum ConversionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         Role        @default(USER)
+  avatarUrl    String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  addresses     Address[]
+  wishlist      Wishlist?
+  donations     Donation[]
+  referrals     Referral[]
+  notifications Notification[]
+  sellerProfile Seller?
+  ngoProfile    NGO?
+}
+
+model Address {
+  id            String     @id @default(uuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName      String
+  phone         String
+  streetAddress String
+  city          String
+  state         String
+  pincode       String
+  isDefault     Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  donations     Donation[]
+}
+
+model Seller {
+  id           String     @id @default(uuid())
+  userId       String     @unique
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shopName     String
+  logoUrl      String?
+  description  String?
+  websiteUrl   String
+  location     String?
+  isApproved   Boolean    @default(true)
+  isVerified   Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  products    Product[]
+  referrals   Referral[]
+  commissions Commission[]
+}
+
+model NGO {
+  id                   String     @id @default(uuid())
+  userId               String     @unique
+  user                 User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgName              String
+  logoUrl              String?
+  description          String
+  registrationNumber   String
+  verificationDocs     String?
+  isVerified           Boolean    @default(false)
+  address              String
+  city                 String
+  state                String
+  phone                String
+  email                String
+  donationRequirements String
+  acceptsPickup        Boolean    @default(true)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  donations Donation[]
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  imageUrl    String?
+  createdAt   DateTime  @default(now())
+
+  products Product[]
+}
+
+model Product {
+  id                 String         @id @default(uuid())
+  title              String
+  slug               String         @unique
+  description        String
+  price              Float
+  originalPrice      Float?
+  categoryId         String
+  category           Category       @relation(fields: [categoryId], references: [id])
+  sellerId           String
+  seller             Seller         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  sizes              String         // Comma separated e.g. "S,M,L,XL"
+  colors             String         // Comma separated e.g. "Black,White,Beige"
+  material           String?
+  brand              String?
+  externalProductUrl String
+  commissionType     CommissionType @default(PERCENTAGE)
+  commissionValue    Float          @default(10.0) // 10%
+  isAvailable        Boolean        @default(true)
+  isApproved         Boolean        @default(true)
+  isFeatured         Boolean        @default(false)
+  likesCount         Int            @default(0)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  images        ProductImage[]
+  wishlistItems WishlistItem[]
+  referrals     Referral[]
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  position  Int      @default(0)
+}
+
+model Wishlist {
+  id        String         @id @default(uuid())
+  userId    String         @unique
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+  items     WishlistItem[]
+}
+
+model WishlistItem {
+  id         String   @id @default(uuid())
+  wishlistId String
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([wishlistId, productId])
+}
+
+model Referral {
+  id           String      @id @default(uuid())
+  userId       String?
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  productId    String
+  product      Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sellerId     String
+  seller       Seller      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  trackingCode String
+  source       String      @default("product_page")
+  clickedAt    DateTime    @default(now())
+
+  conversion Conversion?
+}
+
+model Conversion {
+  id               String           @id @default(uuid())
+  referralId       String           @unique
+  referral         Referral         @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  orderValue       Float
+  commissionAmount Float
+  status           ConversionStatus @default(PENDING)
+  convertedAt      DateTime         @default(now())
+}
+
+model Commission {
+  id          String   @id @default(uuid())
+  sellerId    String
+  seller      Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  totalAmount Float
+  status      String   @default("UNPAID") // UNPAID, PAID
+  period      String
+  createdAt   DateTime @default(now())
+}
+
+model Donation {
+  id                  String         @id @default(uuid())
+  trackingNumber      String         @unique
+  userId              String
+  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ngoId               String?
+  ngo                 NGO?           @relation(fields: [ngoId], references: [id], onDelete: SetNull)
+  addressId           String?
+  address             Address?       @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  
+  donorName           String
+  donorPhone          String
+  donorEmail          String
+  streetAddress       String
+  city                String
+  state               String
+  pincode             String
+  
+  clothingCategory    String         // Men, Women, Kids, Winter, etc.
+  approximateQuantity Int
+  condition           String         // NEW, LIKE_NEW, GOOD, USED
+  pickupRequired      Boolean        @default(true)
+  preferredPickupDate String?
+  additionalNotes     String?
+  status              DonationStatus @default(SUBMITTED)
+  
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  statusHistory DonationStatusHistory[]
+}
+
+model DonationStatusHistory {
+  id         String         @id @default(uuid())
+  donationId String
+  donation   Donation       @relation(fields: [donationId], references: [id], onDelete: Cascade)
+  status     DonationStatus
+  notes      String?
+  updatedBy  String?
+  createdAt  DateTime       @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("INFO") // INFO, DONATION, REFERRAL, SYSTEM
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
